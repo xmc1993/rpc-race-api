@@ -1,12 +1,18 @@
 package com.alibaba.middleware.race.rpc.api.impl;
 
-import com.alibaba.middleware.race.rpc.aop.ConsumerHook;
 import com.alibaba.middleware.race.rpc.api.RpcProvider;
+
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Proxy;
+import java.lang.reflect.Method;
 
 /**
  * Created by Administrator on 2015/7/28.
  */
 public class RpcProviderimpl extends RpcProvider {
+    private static final String HOST= "127.0.0.1";
+    private static final int PORT = 9999;
+
     private Class<?> serviceInterface;
     private String version;
     private int timeout;
@@ -32,6 +38,7 @@ public class RpcProviderimpl extends RpcProvider {
 
     @Override
     public RpcProvider timeout(int timeout) {
+        this.timeout=timeout;
         return super.timeout(timeout);
     }
 
@@ -42,7 +49,7 @@ public class RpcProviderimpl extends RpcProvider {
     }
 
     @Override
-    public void publish() {
+    public void publish() throws InvocationTargetException, IllegalAccessException {
         //调用服务模块启动 
         //我感觉这里要做的事情是
         /*
@@ -57,7 +64,39 @@ public class RpcProviderimpl extends RpcProvider {
          * 
          * 回调
          */
+
+        //建立网络连接 监听中 - - -
+        String methodName="";
+        Class<?>[] parameterTypes={String.class};
+        Object[] arguments={new String("abc")};
+
+        try {
+            Method method=serviceInstance.getClass().getMethod(methodName,parameterTypes);   //获得对应的方法然后
+            method.invoke(serviceInstance,arguments);                                     //然后利用得到的参数调用得到的方法
+        } catch (NoSuchMethodException e) {
+
+        }
+        //计算得到结果将结果返回？
+
+        //监听中 - - -
         super.publish();
     }
     
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
