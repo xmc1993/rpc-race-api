@@ -76,7 +76,7 @@ public class RpcProviderimpl extends RpcProvider {
         } catch (NoSuchMethodException e) {
 
         }
-        //计算得到结果将结果返回？
+        //计算得到结果将结果放到输出流中
 
         //监听中 - - -
         super.publish();

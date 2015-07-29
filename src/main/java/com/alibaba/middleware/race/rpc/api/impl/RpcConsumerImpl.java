@@ -1,5 +1,6 @@
 package com.alibaba.middleware.race.rpc.api.impl;
 
+import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 
 import com.alibaba.middleware.race.rpc.aop.ConsumerHook;
@@ -76,7 +77,53 @@ public class RpcConsumerImpl extends RpcConsumer {
          * Method
          * 
          */
+
+
         return super.invoke(proxy, method, args);
     }
 
+    class ConsumerHandler implements InvocationHandler{
+        private Object target=null;
+
+        ConsumerHandler(Object target){
+            this.target=target;
+        }
+
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+            System.out.println("before process...");
+            Object result=method.invoke(target,args);
+            System.out.println("after process...");
+            return null;
+        }
+    }
+
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
