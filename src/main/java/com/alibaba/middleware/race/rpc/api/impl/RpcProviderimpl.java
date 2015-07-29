@@ -7,6 +7,7 @@ import io.netty.channel.*;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
 import java.lang.reflect.Method;
+import java.rmi.*;
 
 /**
  * Created by Administrator on 2015/7/28.
@@ -122,7 +123,6 @@ public class RpcProviderimpl extends RpcProvider {
         //计算得到结果将结果放到输出流中
 
         //监听中 - - -
-        super.publish();
     }
     
 }
