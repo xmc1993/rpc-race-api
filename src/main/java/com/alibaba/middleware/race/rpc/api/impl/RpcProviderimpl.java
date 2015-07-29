@@ -1,19 +1,13 @@
 package com.alibaba.middleware.race.rpc.api.impl;
 
 import com.alibaba.middleware.race.rpc.api.RpcProvider;
-import com.alibaba.middleware.race.rpc.api.netty.NettyServer;
-import io.netty.channel.*;
-import io.netty.channel.socket.ServerSocketChannel;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Proxy;
 import java.lang.reflect.Method;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.rmi.*;
 
 /**
  * Created by Administrator on 2015/7/28.
@@ -57,7 +51,7 @@ public class RpcProviderimpl extends RpcProvider {
     }
 
     @Override
-    public void publish() throws InvocationTargetException, IllegalAccessException, IOException {
+    public void publish(){
         //调用服务模块启动 
         //我感觉这里要做的事情是
         /*
@@ -75,7 +69,12 @@ public class RpcProviderimpl extends RpcProvider {
 
         //建立网络连接 监听中 - - -
 
-        ServerSocket server=new ServerSocket(PORT);   //在该端口创建监听
+        ServerSocket server= null;   //在该端口创建监听
+        try {
+            server = new ServerSocket(PORT);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
         for(;;) {                                    //开始监听
             try {
