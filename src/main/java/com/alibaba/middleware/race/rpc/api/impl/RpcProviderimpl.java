@@ -12,7 +12,7 @@ import java.net.Socket;
 /**
  * Created by Administrator on 2015/7/28.
  */
-public class RpcProviderimpl extends RpcProvider {
+public class RpcProviderImpl extends RpcProvider {
     private static final int PORT = 9999;
 
     private Class<?> serviceInterface;
