@@ -1,6 +1,8 @@
 package com.alibaba.middleware.race.rpc.api.impl;
 
 import com.alibaba.middleware.race.rpc.api.RpcProvider;
+import com.alibaba.middleware.race.rpc.api.netty.NettyServer;
+import io.netty.channel.*;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
@@ -10,7 +12,6 @@ import java.lang.reflect.Method;
  * Created by Administrator on 2015/7/28.
  */
 public class RpcProviderimpl extends RpcProvider {
-    private static final String HOST= "127.0.0.1";
     private static final int PORT = 9999;
 
     private Class<?> serviceInterface;
@@ -66,16 +67,58 @@ public class RpcProviderimpl extends RpcProvider {
          */
 
         //建立网络连接 监听中 - - -
-        String methodName="";
-        Class<?>[] parameterTypes={String.class};
-        Object[] arguments={new String("abc")};
+        final String[] methodName = new String[0];
+        final Class<?>[][] parameterTypes = new Class<?>[1][1];
+        final Object[][] arguments = new Object[0][];
+
+        NettyServer nettyServer=new NettyServer(PORT,new ChannelInitializer<Channel>(){                    //传入port和channel两个参数建立一个Server实例
+
+            @Override
+            protected void initChannel(Channel channel) throws Exception {
+                channel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
+
+                    @Override
+                    public void channelRead(ChannelHandlerContext channelHandlerContext, Object o) throws Exception {
+                        if(o instanceof String){       //如果传过来的是方法名
+                            methodName[0] =(String) o;
+                        }else if(o instanceof  Class<?>[]){    //如果传过来的是参数的类型数组
+                            parameterTypes[0] =( Class<?>[])o;
+                        }else if(o instanceof Object[]){        //如果传过来的是参数数组
+                            arguments[0] =(Object[])o;
+                            try {
+                                Method method=serviceInstance.getClass().getMethod(methodName[0], parameterTypes[0]);   //获得对应的方法然后
+                                Object result=method.invoke(serviceInstance, arguments[0]);                                          //然后利用得到的参数调用得到的方法
+
+                                channelHandlerContext.writeAndFlush(result).sync();              //将调用结果使用Netty进行传输
+
+                            } catch (NoSuchMethodException e) {
+                                e.printStackTrace();
+                            }
+                        }
+                    }
+
+                    @Override
+                    public void channelReadComplete(ChannelHandlerContext channelHandlerContext) throws Exception {
+
+                    }
+
+                    @Override
+                    public void exceptionCaught(ChannelHandlerContext channelHandlerContext, Throwable throwable) throws Exception {
+
+                    }
+                });
+            }
+        });
+
 
         try {
-            Method method=serviceInstance.getClass().getMethod(methodName,parameterTypes);   //获得对应的方法然后
-            method.invoke(serviceInstance,arguments);                                     //然后利用得到的参数调用得到的方法
-        } catch (NoSuchMethodException e) {
-
+            nettyServer.start();
+        } catch (Exception e) {
+            e.printStackTrace();
         }
+
+
+
         //计算得到结果将结果放到输出流中
 
         //监听中 - - -
