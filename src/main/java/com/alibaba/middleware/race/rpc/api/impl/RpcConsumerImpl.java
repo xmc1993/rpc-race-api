@@ -1,8 +1,11 @@
 package com.alibaba.middleware.race.rpc.api.impl;
 
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.net.Socket;
 
 import com.alibaba.middleware.race.rpc.aop.ConsumerHook;
 import com.alibaba.middleware.race.rpc.api.RpcConsumer;
@@ -12,6 +15,8 @@ import com.alibaba.middleware.race.rpc.async.ResponseCallbackListener;
  * Created by Administrator on 2015/7/28.
  */
 public class RpcConsumerImpl extends RpcConsumer {
+    private  static final String HOST = "127.0.0.1";
+    private static final int PORT = 9999;
     private Class<?> interfaceClass;
     private String version;
     private int clientTimeout;
@@ -92,13 +97,31 @@ public class RpcConsumerImpl extends RpcConsumer {
          */
           System.out.println("调用方法前- - - -");
 
-          Object result=null;
+          Socket socket =new Socket(HOST,PORT);
+          try{
+              ObjectOutputStream objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
+              try{
+                  objectOutputStream.writeObject(method.getName());
+                  objectOutputStream.writeObject(method.getParameterTypes());
+                  objectOutputStream.writeObject(args);
+                  ObjectInputStream objectInputStream =new ObjectInputStream(socket.getInputStream());
+                  try{
+                      Object result = objectInputStream.readObject();
+                      if(result instanceof Throwable){                     //如果是异常就要抛出异常？
+                          throw (Throwable) result;
+                      }
+                      return result;
+                  }finally {
+                      objectInputStream.close();
+                  }
+              }finally {
+                  objectOutputStream.close();
+              }
+          }finally {
+              socket.close();
+          }
 
 
-
-          System.out.println("调用方法前- - - -");
-
-          return result;
     }
 
 
