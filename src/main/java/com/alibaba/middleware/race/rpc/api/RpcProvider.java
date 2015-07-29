@@ -1,5 +1,6 @@
 package com.alibaba.middleware.race.rpc.api;
 
+import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 
 /**
@@ -67,7 +68,7 @@ public class RpcProvider {
      * after all , you cannot write servers' ips in config file when you have 1 million server.
      * you can use ZooKeeper as your registry server to make your services found by your consumers.
      */
-    public void publish() throws InvocationTargetException, IllegalAccessException {
+    public void publish() throws InvocationTargetException, IllegalAccessException, IOException {
         //TODO
     }
 }

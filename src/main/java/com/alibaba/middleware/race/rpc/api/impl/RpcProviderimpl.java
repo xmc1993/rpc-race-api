@@ -3,10 +3,16 @@ package com.alibaba.middleware.race.rpc.api.impl;
 import com.alibaba.middleware.race.rpc.api.RpcProvider;
 import com.alibaba.middleware.race.rpc.api.netty.NettyServer;
 import io.netty.channel.*;
+import io.netty.channel.socket.ServerSocketChannel;
 
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
 import java.lang.reflect.Method;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.rmi.*;
 
 /**
@@ -51,7 +57,7 @@ public class RpcProviderimpl extends RpcProvider {
     }
 
     @Override
-    public void publish() throws InvocationTargetException, IllegalAccessException {
+    public void publish() throws InvocationTargetException, IllegalAccessException, IOException {
         //调用服务模块启动 
         //我感觉这里要做的事情是
         /*
@@ -68,56 +74,53 @@ public class RpcProviderimpl extends RpcProvider {
          */
 
         //建立网络连接 监听中 - - -
-        final String[] methodName = new String[0];
-        final Class<?>[][] parameterTypes = new Class<?>[1][1];
-        final Object[][] arguments = new Object[0][];
 
-        NettyServer nettyServer=new NettyServer(PORT,new ChannelInitializer<Channel>(){                    //传入port和channel两个参数建立一个Server实例
+        ServerSocket server=new ServerSocket(PORT);   //在该端口创建监听
 
-            @Override
-            protected void initChannel(Channel channel) throws Exception {
-                channel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
-
+        for(;;) {                                    //开始监听
+            try {
+                final Socket socket = server.accept();                 //当接收到一个socket请求
+                new Thread(new Runnable() {
                     @Override
-                    public void channelRead(ChannelHandlerContext channelHandlerContext, Object o) throws Exception {
-                        if(o instanceof String){       //如果传过来的是方法名
-                            methodName[0] =(String) o;
-                        }else if(o instanceof  Class<?>[]){    //如果传过来的是参数的类型数组
-                            parameterTypes[0] =( Class<?>[])o;
-                        }else if(o instanceof Object[]){        //如果传过来的是参数数组
-                            arguments[0] =(Object[])o;
+                    public void run() {
+                        try {
                             try {
-                                Method method=serviceInstance.getClass().getMethod(methodName[0], parameterTypes[0]);   //获得对应的方法然后
-                                Object result=method.invoke(serviceInstance, arguments[0]);                                          //然后利用得到的参数调用得到的方法
-
-                                channelHandlerContext.writeAndFlush(result).sync();              //将调用结果使用Netty进行传输
-
-                            } catch (NoSuchMethodException e) {
-                                e.printStackTrace();
+                                ObjectInputStream input = new ObjectInputStream(socket.getInputStream());
+                                try {
+                                    /**
+                                     * 得到传过来的三个参数
+                                     * param1:methodName
+                                     * param2:parameterTypes
+                                     * param3:arguments
+                                     */
+                                    String methodName = input.readUTF();
+                                    Class<?>[] parameterTypes = (Class<?>[])input.readObject();
+                                    Object[] arguments = (Object[])input.readObject();
+                                    ObjectOutputStream output = new ObjectOutputStream(socket.getOutputStream());
+                                    try {
+                                        Method method = serviceInstance.getClass().getMethod(methodName, parameterTypes);
+                                        Object result = method.invoke(serviceInstance, arguments);
+                                        output.writeObject(result);
+                                    } catch (Throwable t) {
+                                        output.writeObject(t);
+                                    } finally {
+                                        output.close();
+                                    }
+                                } finally {
+                                    input.close();
+                                }
+                            } finally {
+                                socket.close();
                             }
+                        } catch (Exception e) {
+                            e.printStackTrace();
                         }
                     }
-
-                    @Override
-                    public void channelReadComplete(ChannelHandlerContext channelHandlerContext) throws Exception {
-
-                    }
-
-                    @Override
-                    public void exceptionCaught(ChannelHandlerContext channelHandlerContext, Throwable throwable) throws Exception {
-
-                    }
-                });
+                }).start();
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-        });
-
-
-        try {
-            nettyServer.start();
-        } catch (Exception e) {
-            e.printStackTrace();
         }
-
 
 
         //计算得到结果将结果放到输出流中

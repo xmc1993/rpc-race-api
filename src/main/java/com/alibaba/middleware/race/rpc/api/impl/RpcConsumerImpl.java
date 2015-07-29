@@ -101,7 +101,10 @@ public class RpcConsumerImpl extends RpcConsumer {
           try{
               ObjectOutputStream objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
               try{
-                  objectOutputStream.writeObject(method.getName());
+                  /**
+                   * 将调用的一些信息传递过去
+                   */
+                  objectOutputStream.writeUTF(method.getName());
                   objectOutputStream.writeObject(method.getParameterTypes());
                   objectOutputStream.writeObject(args);
                   ObjectInputStream objectInputStream =new ObjectInputStream(socket.getInputStream());
