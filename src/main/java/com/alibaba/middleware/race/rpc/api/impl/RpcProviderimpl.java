@@ -1,17 +1,28 @@
 package com.alibaba.middleware.race.rpc.api.impl;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.ChannelInitializer;
+import io.netty.handler.codec.serialization.ClassResolvers;
+import io.netty.handler.codec.serialization.ObjectDecoder;
+import io.netty.handler.codec.serialization.ObjectEncoder;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+
 import com.alibaba.middleware.race.rpc.api.RpcProvider;
 import com.alibaba.middleware.race.rpc.api.netty.NettyServer;
-import io.netty.channel.*;
-
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Proxy;
-import java.lang.reflect.Method;
+import com.alibaba.middleware.race.rpc.utils.Converter;
 
 /**
  * Created by Administrator on 2015/7/28.
  */
-public class RpcProviderimpl extends RpcProvider {
+public class RpcProviderImpl extends RpcProvider {
     private static final int PORT = 9999;
 
     private Class<?> serviceInterface;
@@ -67,30 +78,28 @@ public class RpcProviderimpl extends RpcProvider {
          */
 
         //建立网络连接 监听中 - - -
-        final String[] methodName = new String[0];
-        final Class<?>[][] parameterTypes = new Class<?>[1][1];
-        final Object[][] arguments = new Object[0][];
 
         NettyServer nettyServer=new NettyServer(PORT,new ChannelInitializer<Channel>(){                    //传入port和channel两个参数建立一个Server实例
-
+            String methodName=null;
+            Class<?>[] parameterTypes=null;
+            Object[] arguments=null;
             @Override
             protected void initChannel(Channel channel) throws Exception {
+            	 channel.pipeline().addLast(new ObjectDecoder(ClassResolvers.cacheDisabled(this.getClass().getClassLoader())),new ObjectEncoder());
                 channel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
 
                     @Override
                     public void channelRead(ChannelHandlerContext channelHandlerContext, Object o) throws Exception {
                         if(o instanceof String){       //如果传过来的是方法名
-                            methodName[0] =(String) o;
+                            methodName =(String) o;
                         }else if(o instanceof  Class<?>[]){    //如果传过来的是参数的类型数组
-                            parameterTypes[0] =( Class<?>[])o;
+                            parameterTypes =( Class<?>[])o;
                         }else if(o instanceof Object[]){        //如果传过来的是参数数组
-                            arguments[0] =(Object[])o;
+                            arguments =(Object[])o;
                             try {
-                                Method method=serviceInstance.getClass().getMethod(methodName[0], parameterTypes[0]);   //获得对应的方法然后
-                                Object result=method.invoke(serviceInstance, arguments[0]);                                          //然后利用得到的参数调用得到的方法
-
+                                Method method=serviceInstance.getClass().getMethod(methodName, parameterTypes);   //获得对应的方法然后
+                                Object result=method.invoke(serviceInstance, arguments);                                          //然后利用得到的参数调用得到的方法
                                 channelHandlerContext.writeAndFlush(result).sync();              //将调用结果使用Netty进行传输
-
                             } catch (NoSuchMethodException e) {
                                 e.printStackTrace();
                             }
@@ -99,25 +108,26 @@ public class RpcProviderimpl extends RpcProvider {
 
                     @Override
                     public void channelReadComplete(ChannelHandlerContext channelHandlerContext) throws Exception {
-
+                    	channelHandlerContext.close();  
                     }
 
                     @Override
                     public void exceptionCaught(ChannelHandlerContext channelHandlerContext, Throwable throwable) throws Exception {
-
+                    	//打印异常信息并关闭连接  
+                    	throwable.printStackTrace();  
+                    	channelHandlerContext.close();  
                     }
                 });
+               
+                
             }
         });
-
 
         try {
             nettyServer.start();
         } catch (Exception e) {
             e.printStackTrace();
         }
-
-
 
         //计算得到结果将结果放到输出流中
 

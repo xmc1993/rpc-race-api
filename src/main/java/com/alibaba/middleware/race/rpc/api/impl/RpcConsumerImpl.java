@@ -1,11 +1,21 @@
 package com.alibaba.middleware.race.rpc.api.impl;
 
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.lang.reflect.InvocationHandler;
+import io.netty.bootstrap.Bootstrap;
+import io.netty.channel.ChannelFuture;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelOption;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.SocketChannel;
+import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.codec.serialization.ClassResolvers;
+import io.netty.handler.codec.serialization.ObjectDecoder;
+import io.netty.handler.codec.serialization.ObjectEncoder;
+
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
-import java.net.Socket;
 
 import com.alibaba.middleware.race.rpc.aop.ConsumerHook;
 import com.alibaba.middleware.race.rpc.api.RpcConsumer;
@@ -21,7 +31,7 @@ public class RpcConsumerImpl extends RpcConsumer {
     private String version;
     private int clientTimeout;
     private ConsumerHook hook;
-
+    private Object returnObj;
     @Override
     public RpcConsumer interfaceClass(Class<?> interfaceClass) {
         /**
@@ -88,43 +98,73 @@ public class RpcConsumerImpl extends RpcConsumer {
     }
 
     @Override
-    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+    public Object invoke(Object proxy, final Method method, final Object[] args) throws Throwable {
         /**
          * ConsumerImpl会返回给客户端一个代理类
          * 当客户端通过代理调用函数的时候
          * 代理类对象就会通过invoke方法来调用相应的方法
          * Client端并没有服务类型的实例
          */
-          System.out.println("调用方法前- - - -");
-
-          Socket socket =new Socket(HOST,PORT);
-          try{
-              ObjectOutputStream objectOutputStream = new ObjectOutputStream(socket.getOutputStream());
-              try{
-                  objectOutputStream.writeObject(method.getName());
-                  objectOutputStream.writeObject(method.getParameterTypes());
-                  objectOutputStream.writeObject(args);
-                  ObjectInputStream objectInputStream =new ObjectInputStream(socket.getInputStream());
-                  try{
-                      Object result = objectInputStream.readObject();
-                      if(result instanceof Throwable){                     //如果是异常就要抛出异常？
-                          throw (Throwable) result;
-                      }
-                      return result;
-                  }finally {
-                      objectInputStream.close();
-                  }
-              }finally {
-                  objectOutputStream.close();
-              }
-          }finally {
-              socket.close();
+          EventLoopGroup workerGroup = new NioEventLoopGroup();  
+          try {  
+              Bootstrap b = new Bootstrap();  
+              b.group(workerGroup)  
+                      .channel(NioSocketChannel.class)  
+                      .option(ChannelOption.SO_KEEPALIVE, true)  
+                      .handler(new ChannelInitializer<SocketChannel>() {  
+                          @Override  
+                          protected void initChannel(SocketChannel ch) throws Exception {  
+                              ch.pipeline().addLast(new ObjectDecoder(ClassResolvers.cacheDisabled(this.getClass().getClassLoader())),new ObjectEncoder(), new ObjectClientHandler(method,args));  
+                          }  
+                      });  
+              
+              ChannelFuture f = b.connect("127.0.0.1", 9999).sync();  
+              f.channel().closeFuture().sync();  
+          } finally {  
+              workerGroup.shutdownGracefully();  
+          }  
+          //I don't have a better way to do this
+          //If u have any idea, please contact me
+          while(returnObj==null){
           }
-
-
+          Object result=returnObj;
+          returnObj=null;
+          return result;
     }
+  
+    public class ObjectClientHandler extends ChannelInboundHandlerAdapter {  
+    	  Method method;
+    	  Object[] args;
+        public ObjectClientHandler(Method method, Object[] args) {
+			this.method=method;
+			this.args=args;
+		}
 
-
+		@Override  
+        public void channelActive(ChannelHandlerContext ctx) throws Exception {  
+            ctx.write(method.getName());  
+            ctx.write(method.getParameterTypes());  
+            args=new Object[0];
+            ctx.write(args);  
+            ctx.flush();  
+        }  
+      
+        @Override  
+        public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+            System.out.println("Consumer got msg:"+msg);
+            returnObj=msg;
+//            synchronized (RpcConsumerImpl.this){ 
+//          	  RpcConsumerImpl.this.notifyAll();
+//            }
+            ctx.close();  
+        }  
+      
+        @Override  
+        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {  
+            cause.printStackTrace();  
+            ctx.close();  
+        }  
+    }
 }
 
 
