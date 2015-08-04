@@ -68,7 +68,7 @@ public class RpcProvider {
      * after all , you cannot write servers' ips in config file when you have 1 million server.
      * you can use ZooKeeper as your registry server to make your services found by your consumers.
      */
-    public void publish(){
+    public void publish() throws InvocationTargetException, IllegalAccessException {
         //TODO
     }
 }
