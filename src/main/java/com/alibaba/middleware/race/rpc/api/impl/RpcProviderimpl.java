@@ -20,6 +20,7 @@ public class RpcProviderImpl extends RpcProvider {
     private int timeout;
     private String serializeType;
     Object serviceInstance;
+
     @Override
     public RpcProvider serviceInterface(Class<?> serviceInterface) {
         this.serviceInterface=serviceInterface;
