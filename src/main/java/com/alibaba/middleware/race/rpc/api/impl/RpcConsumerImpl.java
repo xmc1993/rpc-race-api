@@ -129,6 +129,10 @@ public class RpcConsumerImpl extends RpcConsumer {
           }
           Object result=returnObj;
           returnObj=null;
+          if(result instanceof ExceptionWrapper){
+              ExceptionWrapper e=(ExceptionWrapper)result;
+              throw (Exception)Class.forName(e.getExceptionClass()).cast(e.getThrowable());
+          }
           return result;
     }
   

@@ -9,15 +9,11 @@ import io.netty.handler.codec.serialization.ClassResolvers;
 import io.netty.handler.codec.serialization.ObjectDecoder;
 import io.netty.handler.codec.serialization.ObjectEncoder;
 
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.ObjectInputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
 import com.alibaba.middleware.race.rpc.api.RpcProvider;
 import com.alibaba.middleware.race.rpc.api.netty.NettyServer;
-import com.alibaba.middleware.race.rpc.utils.Converter;
 
 /**
  * Created by Administrator on 2015/7/28.
@@ -102,6 +98,12 @@ public class RpcProviderImpl extends RpcProvider {
                                 channelHandlerContext.writeAndFlush(result).sync();              //将调用结果使用Netty进行传输
                             } catch (NoSuchMethodException e) {
                                 e.printStackTrace();
+                            }  catch (Exception e) {
+                                // 异常也需要传出去
+                                InvocationTargetException targetEx = (InvocationTargetException)e; 
+                                Throwable t = targetEx .getTargetException();
+                                ExceptionWrapper ewrapper=new ExceptionWrapper(t, t.getClass().getName());
+                                channelHandlerContext.writeAndFlush((Object)ewrapper).sync();
                             }
                         }
                     }
@@ -118,7 +120,6 @@ public class RpcProviderImpl extends RpcProvider {
                     	channelHandlerContext.close();  
                     }
                 });
-               
                 
             }
         });
