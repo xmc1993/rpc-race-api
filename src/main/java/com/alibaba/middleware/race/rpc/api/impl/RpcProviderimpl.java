@@ -14,6 +14,9 @@ import java.lang.reflect.Method;
 
 import com.alibaba.middleware.race.rpc.api.RpcProvider;
 import com.alibaba.middleware.race.rpc.api.netty.NettyServer;
+import com.alibaba.middleware.race.rpc.context.RpcContext;
+import com.alibaba.middleware.race.rpc.model.RpcRequest;
+import com.alibaba.middleware.race.rpc.model.RpcResponse;
 
 /**
  * Created by Administrator on 2015/7/28.
@@ -76,36 +79,38 @@ public class RpcProviderImpl extends RpcProvider {
         //建立网络连接 监听中 - - -
 
         NettyServer nettyServer=new NettyServer(PORT,new ChannelInitializer<Channel>(){                    //传入port和channel两个参数建立一个Server实例
-            String methodName=null;
-            Class<?>[] parameterTypes=null;
-            Object[] arguments=null;
+
             @Override
             protected void initChannel(Channel channel) throws Exception {
             	 channel.pipeline().addLast(new ObjectDecoder(ClassResolvers.cacheDisabled(this.getClass().getClassLoader())),new ObjectEncoder());
                 channel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
-
+                       
                     @Override
                     public void channelRead(ChannelHandlerContext channelHandlerContext, Object o) throws Exception {
-                        if(o instanceof String){       //如果传过来的是方法名
-                            methodName =(String) o;
-                        }else if(o instanceof  Class<?>[]){    //如果传过来的是参数的类型数组
-                            parameterTypes =( Class<?>[])o;
-                        }else if(o instanceof Object[]){        //如果传过来的是参数数组
-                            arguments =(Object[])o;
+                        if(o instanceof RpcRequest){
+                            RpcRequest request=(RpcRequest)o;
+                            String methodName=request.getMethodName();
+                            Class<?>[] parameterTypes=request.getParamTypes();
+                            Object[] arguments=request.getParams();
+                            RpcResponse response=new RpcResponse();
+                            RpcContext.setLocalProps(request.getProp());
                             try {
                                 Method method=serviceInstance.getClass().getMethod(methodName, parameterTypes);   //获得对应的方法然后
                                 Object result=method.invoke(serviceInstance, arguments);                                          //然后利用得到的参数调用得到的方法
-                                channelHandlerContext.writeAndFlush(result).sync();              //将调用结果使用Netty进行传输
+                                response.setAppResponse(result);
                             } catch (NoSuchMethodException e) {
                                 e.printStackTrace();
                             }  catch (Exception e) {
                                 // 异常也需要传出去
                                 InvocationTargetException targetEx = (InvocationTargetException)e; 
                                 Throwable t = targetEx .getTargetException();
-                                ExceptionWrapper ewrapper=new ExceptionWrapper(t, t.getClass().getName());
-                                channelHandlerContext.writeAndFlush((Object)ewrapper).sync();
+                                response.setAppResponse(t);
+                                response.setErrorMsg(t.getClass().getName());
                             }
+                            response.setProp(RpcContext.getProps());
+                            channelHandlerContext.writeAndFlush(response).sync();
                         }
+                        //如果传过来的不是rpcrequest，那我也不知道为啥了，就不管他了
                     }
 
                     @Override

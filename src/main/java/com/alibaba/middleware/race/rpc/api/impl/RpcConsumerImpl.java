@@ -16,10 +16,15 @@ import io.netty.handler.codec.serialization.ObjectEncoder;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.HashMap;
+import java.util.Map;
 
 import com.alibaba.middleware.race.rpc.aop.ConsumerHook;
 import com.alibaba.middleware.race.rpc.api.RpcConsumer;
 import com.alibaba.middleware.race.rpc.async.ResponseCallbackListener;
+import com.alibaba.middleware.race.rpc.context.RpcContext;
+import com.alibaba.middleware.race.rpc.model.RpcRequest;
+import com.alibaba.middleware.race.rpc.model.RpcResponse;
 
 /**
  * Created by Administrator on 2015/7/28.
@@ -106,6 +111,7 @@ public class RpcConsumerImpl extends RpcConsumer {
          * Client端并没有服务类型的实例
          */
           EventLoopGroup workerGroup = new NioEventLoopGroup();  
+          final Map<String,Object> context=RpcContext.getProps();
           try {  
               Bootstrap b = new Bootstrap();  
               b.group(workerGroup)  
@@ -114,49 +120,46 @@ public class RpcConsumerImpl extends RpcConsumer {
                       .handler(new ChannelInitializer<SocketChannel>() {  
                           @Override  
                           protected void initChannel(SocketChannel ch) throws Exception {  
-                              ch.pipeline().addLast(new ObjectDecoder(ClassResolvers.cacheDisabled(this.getClass().getClassLoader())),new ObjectEncoder(), new ObjectClientHandler(method,args));  
+                              ch.pipeline().addLast(new ObjectDecoder(ClassResolvers.cacheDisabled(this.getClass().getClassLoader())),new ObjectEncoder(), new ObjectClientHandler(method,args,context));  
                           }  
                       });  
-              
-              ChannelFuture f = b.connect("127.0.0.1", 9999).sync();  
-              f.channel().closeFuture().sync();  
+              ChannelFuture f = b.connect(HOST, PORT).sync();  
+              f.channel().closeFuture().sync();
           } finally {  
               workerGroup.shutdownGracefully();  
           }  
           //I don't have a better way to do this
           //If u have any idea, please contact me
-          while(returnObj==null){
+//          while(returnObj==null){
+//          }
+          RpcResponse result=(RpcResponse)returnObj;
+//          returnObj=null;
+          if(result.isError()){
+              throw (Exception)Class.forName(result.getErrorMsg()).cast(result.getAppResponse());
           }
-          Object result=returnObj;
-          returnObj=null;
-          if(result instanceof ExceptionWrapper){
-              ExceptionWrapper e=(ExceptionWrapper)result;
-              throw (Exception)Class.forName(e.getExceptionClass()).cast(e.getThrowable());
-          }
-          return result;
+          return result.getAppResponse();
     }
   
     public class ObjectClientHandler extends ChannelInboundHandlerAdapter {  
     	  Method method;
     	  Object[] args;
-        public ObjectClientHandler(Method method, Object[] args) {
+    	  Map<String, Object> context;
+        public ObjectClientHandler(Method method, Object[] args, Map<String, Object> context) {
 			this.method=method;
 			this.args=args;
+			this.context=context;
 		}
 
 		@Override  
         public void channelActive(ChannelHandlerContext ctx) throws Exception {  
-            ctx.write(method.getName());  
-            ctx.write(method.getParameterTypes());  
-            args=new Object[0];
-            ctx.write(args);  
+            ctx.write(new RpcRequest(context, method.getName(), method.getParameterTypes(), args));  
             ctx.flush();  
         }  
       
         @Override  
         public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-            System.out.println("Consumer got msg:"+msg);
             returnObj=msg;
+//            System.out.println("Consumer got msg:"+msg);
 //            synchronized (RpcConsumerImpl.this){ 
 //          	  RpcConsumerImpl.this.notifyAll();
 //            }
