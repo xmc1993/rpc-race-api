@@ -61,22 +61,6 @@ public class RpcProviderImpl extends RpcProvider {
 
     @Override
     public void publish() throws InvocationTargetException, IllegalAccessException {
-        //调用服务模块启动 
-        //我感觉这里要做的事情是
-        /*
-         * 开线程 开服务
-         * 不停监听端口
-         * 有传送 invoke具体方法
-         * 
-         *  这一块感觉不一定是在这的
-         *  
-         * 接收到发过来的method
-         * 调用method的具体invoke
-         * 
-         * 回调
-         */
-
-        //建立网络连接 监听中 - - -
 
         NettyServer nettyServer=new NettyServer(PORT,new ChannelInitializer<Channel>(){                    //传入port和channel两个参数建立一个Server实例
 
