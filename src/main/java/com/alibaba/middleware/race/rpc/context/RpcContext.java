@@ -8,7 +8,7 @@ import java.util.Map;
  * Created by huangsheng.hs on 2015/4/8.
  */
 public class RpcContext {
-    private static ThreadLocal<Map<String,Object>> propPool=new ThreadLocal<Map<String,Object>>();
+    private static ThreadLocal<HashMap<String,Object>> propPool=new ThreadLocal<HashMap<String,Object>>();
 //    public static Map<String,Object> props = new HashMap<String, Object>();
 
     public static void addProp(String key ,Object value){
@@ -23,14 +23,14 @@ public class RpcContext {
        return Collections.unmodifiableMap(getLocalProps());
     }
     
-    private static Map<String,Object> getLocalProps(){
+    public static HashMap<String,Object> getLocalProps(){
         if(propPool.get()==null){
             propPool.set(new HashMap<String, Object>());
         }
         return propPool.get();
     }
     
-    public static void setLocalProps(Map<String,Object> prop){
+    public static void setLocalProps(HashMap<String,Object> prop){
         propPool.set(prop);
     }
     

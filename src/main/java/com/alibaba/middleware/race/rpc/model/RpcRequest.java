@@ -1,35 +1,42 @@
 package com.alibaba.middleware.race.rpc.model;
 
 import java.io.Serializable;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
  * Created by huangsheng.hs on 2015/5/7.
  */
-public class RpcRequest implements Serializable{
+public class RpcRequest{
     /**
      * 
      */
     private static final long serialVersionUID = 1L;
-    Map<String,Object> prop;
+    HashMap<String,Object> prop;
     String methodName;
     Class<?>[] paramTypes;
     Object[] params;
     
     
-    public RpcRequest(Map<String, Object> prop, String methodName, Class<?>[] paramTypes, Object[] params){
+    public RpcRequest(HashMap<String, Object> prop, String methodName, Class<?>[] paramTypes, Object[] params){
         super();
         this.prop = prop;
         this.methodName = methodName;
         this.paramTypes = paramTypes;
         this.params = params;
     }
+    
+    
+    public RpcRequest(){
+        // TODO Auto-generated constructor stub
+    }
 
-    public Map<String, Object> getProp() {
+    public HashMap<String, Object> getProp() {
         return prop;
     }
     
-    public void setProp(Map<String, Object> prop) {
+    public void setProp(HashMap<String, Object> prop) {
         this.prop = prop;
     }
 
@@ -63,5 +70,20 @@ public class RpcRequest implements Serializable{
         this.params = params;
     }
 
+    @Override
+    public String toString() {
+        return "[RpcRequest="+methodName.toString()+"]";
+    }
+    
+    @Override
+    public boolean equals(Object obj) {
+        if(obj instanceof RpcRequest){
+            RpcRequest re=(RpcRequest)obj;
+            if(re.methodName.equals(this.methodName) && Arrays.equals(paramTypes, re.paramTypes) && Arrays.equals(this.params, re.params)){
+                return true;
+            }
+        }
+        return false;
+    }
 
 }

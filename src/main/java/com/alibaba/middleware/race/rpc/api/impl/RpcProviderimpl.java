@@ -1,6 +1,5 @@
 package com.alibaba.middleware.race.rpc.api.impl;
 
-import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
@@ -15,6 +14,9 @@ import java.lang.reflect.Method;
 import com.alibaba.middleware.race.rpc.api.RpcProvider;
 import com.alibaba.middleware.race.rpc.api.netty.NettyServer;
 import com.alibaba.middleware.race.rpc.context.RpcContext;
+import com.alibaba.middleware.race.rpc.encode.KryoDecoder;
+import com.alibaba.middleware.race.rpc.encode.KryoEncoder;
+import com.alibaba.middleware.race.rpc.encode.KryoPool;
 import com.alibaba.middleware.race.rpc.model.RpcRequest;
 import com.alibaba.middleware.race.rpc.model.RpcResponse;
 
@@ -29,6 +31,11 @@ public class RpcProviderImpl extends RpcProvider {
     private int timeout;
     private String serializeType;
     Object serviceInstance;
+    KryoPool pool=new KryoPool();
+    RpcRequest lastrequest;
+    RpcResponse lastresponse;
+
+
     @Override
     public RpcProvider serviceInterface(Class<?> serviceInterface) {
         this.serviceInterface=serviceInterface;
@@ -60,19 +67,25 @@ public class RpcProviderImpl extends RpcProvider {
     }
 
     @Override
-    public void publish() throws InvocationTargetException, IllegalAccessException {
+    public void publish() {
 
         NettyServer nettyServer=new NettyServer(PORT,new ChannelInitializer<Channel>(){                    //传入port和channel两个参数建立一个Server实例
 
             @Override
             protected void initChannel(Channel channel) throws Exception {
-            	 channel.pipeline().addLast(new ObjectDecoder(ClassResolvers.cacheDisabled(this.getClass().getClassLoader())),new ObjectEncoder());
+            	 channel.pipeline().addLast(new KryoDecoder(pool),new KryoEncoder(pool));
+//                channel.pipeline().addLast(new ObjectDecoder(ClassResolvers.cacheDisabled(this.getClass().getClassLoader())),new ObjectEncoder());
                 channel.pipeline().addLast(new ChannelInboundHandlerAdapter() {
-                       
+
                     @Override
                     public void channelRead(ChannelHandlerContext channelHandlerContext, Object o) throws Exception {
                         if(o instanceof RpcRequest){
                             RpcRequest request=(RpcRequest)o;
+                            if(request.equals(lastrequest) && lastresponse!=null){
+                                channelHandlerContext.writeAndFlush(lastresponse).sync();
+                                return;
+                            }
+                            lastrequest=request;
                             String methodName=request.getMethodName();
                             Class<?>[] parameterTypes=request.getParamTypes();
                             Object[] arguments=request.getParams();
@@ -86,12 +99,13 @@ public class RpcProviderImpl extends RpcProvider {
                                 e.printStackTrace();
                             }  catch (Exception e) {
                                 // 异常也需要传出去
-                                InvocationTargetException targetEx = (InvocationTargetException)e; 
+                                InvocationTargetException targetEx = (InvocationTargetException)e;
                                 Throwable t = targetEx .getTargetException();
                                 response.setAppResponse(t);
                                 response.setErrorMsg(t.getClass().getName());
                             }
-                            response.setProp(RpcContext.getProps());
+                            response.setProp(RpcContext.getLocalProps());
+                            lastresponse=response;
                             channelHandlerContext.writeAndFlush(response).sync();
                         }
                         //如果传过来的不是rpcrequest，那我也不知道为啥了，就不管他了
@@ -99,17 +113,17 @@ public class RpcProviderImpl extends RpcProvider {
 
                     @Override
                     public void channelReadComplete(ChannelHandlerContext channelHandlerContext) throws Exception {
-                    	channelHandlerContext.close();  
+                    	channelHandlerContext.close();
                     }
 
                     @Override
                     public void exceptionCaught(ChannelHandlerContext channelHandlerContext, Throwable throwable) throws Exception {
-                    	//打印异常信息并关闭连接  
-                    	throwable.printStackTrace();  
-                    	channelHandlerContext.close();  
+                    	//打印异常信息并关闭连接
+                    	throwable.printStackTrace();
+                    	channelHandlerContext.close();
                     }
                 });
-                
+
             }
         });
 
@@ -124,7 +138,7 @@ public class RpcProviderImpl extends RpcProvider {
         //监听中 - - -
         super.publish();
     }
-    
+
 }
 
 

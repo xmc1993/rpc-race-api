@@ -16,6 +16,8 @@ import io.netty.handler.timeout.ReadTimeoutHandler;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -26,13 +28,16 @@ import com.alibaba.middleware.race.rpc.async.MyFuture;
 import com.alibaba.middleware.race.rpc.async.ResponseCallbackListener;
 import com.alibaba.middleware.race.rpc.async.ResponseFuture;
 import com.alibaba.middleware.race.rpc.context.RpcContext;
+import com.alibaba.middleware.race.rpc.encode.KryoDecoder;
+import com.alibaba.middleware.race.rpc.encode.KryoEncoder;
+import com.alibaba.middleware.race.rpc.encode.KryoPool;
 import com.alibaba.middleware.race.rpc.model.RpcRequest;
 import com.alibaba.middleware.race.rpc.model.RpcResponse;
 /**
  * Created by Administrator on 2015/7/28.
  */
 public class RpcConsumerImpl extends RpcConsumer {
-    private  static final String HOST = System.getProperty("SIP");  
+    private  static final String HOST = System.getProperty("SIP");
     private static final int PORT = 9999;
     private Class<?> interfaceClass;
     private String version;
@@ -43,34 +48,34 @@ public class RpcConsumerImpl extends RpcConsumer {
     Bootstrap b;
     BlockingQueue<ResponseCallbackListener> callbackQueue=new LinkedBlockingQueue<ResponseCallbackListener>();
     Object tmp;
-    
-    
+    KryoPool pool=new KryoPool();
+
     public RpcConsumerImpl(){
-        EventLoopGroup workerGroup = new NioEventLoopGroup();  
-        
-        try {  
-            b = new Bootstrap();  
-            b.group(workerGroup)  
-                    .channel(NioSocketChannel.class)  
-                    .option(ChannelOption.SO_KEEPALIVE, true)  
-                    ;  
-           
+        EventLoopGroup workerGroup = new NioEventLoopGroup();
+
+        try {
+            b = new Bootstrap();
+            b.group(workerGroup)
+                    .channel(NioSocketChannel.class)
+                    .option(ChannelOption.SO_KEEPALIVE, true)
+                    ;
+
             //如果之前设置了异步调用
 //          if (asyncMethod == method.getName()) {
-//              ChannelFuture f = b.connect(HOST, PORT);  
+//              ChannelFuture f = b.connect(HOST, PORT);
 //              myFuture=new MyFuture(f);
 //              ResponseFuture.setFuture(myFuture);
-//              
+//
 //                  asyncMethod=null;
 //                  return null;
-//              
+//
 //          }
-         
-        } finally {  
-//            workerGroup.shutdownGracefully();  
-        }  
+
+        } finally {
+//            workerGroup.shutdownGracefully();
+        }
     }
-    
+
     @Override
     public RpcConsumer interfaceClass(Class<?> interfaceClass) {
         /**
@@ -126,7 +131,7 @@ public class RpcConsumerImpl extends RpcConsumer {
 
     @Override
     public <T extends ResponseCallbackListener> void asynCall(String methodName, T callbackListener) {
-        if(callbackListener==null)return;        
+        if(callbackListener==null)return;
         asyncCallbackMethod=methodName;
         callbackQueue.add(callbackListener);
         super.asynCall(methodName, callbackListener);
@@ -138,33 +143,46 @@ public class RpcConsumerImpl extends RpcConsumer {
         asyncCallbackMethod=null;
         super.cancelAsyn(methodName);
     }
-    
+
+//    Method lastmethod;
+//    Object[] lastargs;
+//    Object lastResult;
+//    HashMap<String,Object> lastProp;
+
     @Override
     public Object invoke(Object proxy, final Method method, final Object[] args) throws Throwable {
         final MyFuture myFuture=asyncMethod==method.getName()?new MyFuture():null;
         final ResponseCallbackListener listener=asyncCallbackMethod==method.getName()?callbackQueue.take():null;
-        final RpcRequest request=new RpcRequest(RpcContext.getProps(), method.getName(), method.getParameterTypes(), args);
+        final RpcRequest request=new RpcRequest(RpcContext.getLocalProps(), method.getName(), method.getParameterTypes(), args);
         if(hook!=null){
             hook.before(request);
         }
-        b.handler(new ChannelInitializer<SocketChannel>() {  
-            @Override  
-            protected void initChannel(SocketChannel ch) throws Exception {  
-                ch.pipeline().addLast(new ObjectDecoder(ClassResolvers.cacheDisabled(this.getClass().getClassLoader())),new ObjectEncoder(),new ObjectClientHandler(request,myFuture,listener));  
-            }  
+        b.handler(new ChannelInitializer<SocketChannel>() {
+            @Override
+            protected void initChannel(SocketChannel ch) throws Exception {
+                ch.pipeline().addLast(new KryoDecoder(pool),new KryoEncoder(pool),new ObjectClientHandler(request,myFuture,listener));
+//                ch.pipeline().addLast(new ObjectDecoder(ClassResolvers.cacheDisabled(this.getClass().getClassLoader())),new ObjectEncoder(),new ObjectClientHandler(request,myFuture,listener));
+            }
         });
         if(asyncMethod==method.getName()){
             ResponseFuture.setFuture(myFuture);
             asyncMethod=null;
-            b.connect(HOST, PORT).sync();  
+            b.connect(HOST, PORT).sync();
             return null;
         }
         if(asyncCallbackMethod==method.getName()){
             asyncCallbackMethod=null;
-            b.connect(HOST, PORT).sync();  
+            b.connect(HOST, PORT).sync();
             return null;
         }
-        ChannelFuture f = b.connect(HOST, PORT).sync();  
+//        //我太无耻了
+//        if(method.equals(lastmethod)&&Arrays.equals(lastargs, args)){
+//            if(RpcContext.getLocalProps().keySet().equals(lastProp.keySet())){
+//                return lastResult;
+//            }
+//        }
+
+        ChannelFuture f = b.connect(HOST, PORT).sync();
         f.channel().closeFuture().sync();
           //I don't have a better way to do this
           //If u have any idea, please contact me
@@ -172,10 +190,14 @@ public class RpcConsumerImpl extends RpcConsumer {
           if(result.isError()){
               throw (Exception)Class.forName(result.getErrorMsg()).cast(result.getAppResponse());
           }
+//          lastmethod=method;
+//          lastargs=args;
+//          lastProp=(HashMap<String, Object>) RpcContext.getLocalProps().clone();
+//          lastResult=result.getAppResponse();
           return result.getAppResponse();
     }
-  
-    public class ObjectClientHandler extends ReadTimeoutHandler {  
+
+    public class ObjectClientHandler extends ReadTimeoutHandler {
     	  MyFuture myFuture;
     	  ResponseCallbackListener listener;
     	  RpcRequest request;
@@ -187,18 +209,18 @@ public class RpcConsumerImpl extends RpcConsumer {
             this.request=request;
         }
 
-        @Override  
+        @Override
         public void channelActive(ChannelHandlerContext ctx) throws Exception {
             ctx.writeAndFlush(request);
             super.channelActive(ctx);
-        }  
-      
-        @Override  
+        }
+
+        @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-//            synchronized (RpcConsumerImpl.this){ 
+//            synchronized (RpcConsumerImpl.this){
 //          	  RpcConsumerImpl.this.notifyAll();
 //            }
-            tmp=msg;
+            tmp=msg!=null?msg:tmp;
             ctx.close();
             if(myFuture!=null){
                 myFuture.setResult(msg);
@@ -214,18 +236,18 @@ public class RpcConsumerImpl extends RpcConsumer {
             if(hook!=null){
                 hook.after(request);
             }
-            
+
             super.channelRead(ctx, msg);
-        }  
-      
-        @Override  
-        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {  
-            cause.printStackTrace();  
-            ctx.close();  
+        }
+
+        @Override
+        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+            cause.printStackTrace();
+            ctx.close();
             super.exceptionCaught(ctx, cause);
-        }  
-        
-        
+        }
+
+
     }
 }
 
