@@ -29,8 +29,9 @@ public class NettyServer {
 
             serverBootstrap.group(eventLoopGroup).channel(NioServerSocketChannel.class).localAddress(port)
                     .childHandler(channel);
+            serverBootstrap.bind(port);
         }catch(Exception e){
-
+        	e.printStackTrace();
         }
     }
 }
